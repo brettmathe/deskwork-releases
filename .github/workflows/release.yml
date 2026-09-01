@@ -28,6 +28,11 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      # Only reads files -- no toolchain, no npm ci -- so a mismatched version
+      # fails here in seconds rather than after minutes of Rust setup.
+      - name: Check version consistency
+        run: npm run version:check
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
