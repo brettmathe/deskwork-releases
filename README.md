@@ -6,6 +6,54 @@ A *workspace* is any folder containing `inbox/` and `projects/`. Deskwork never 
 
 Built with Tauri 2 (Rust backend) + Svelte 5 + TypeScript.
 
+## Install
+
+macOS only, universal (Apple Silicon and Intel). Grab the latest `.dmg` from
+[Releases](https://github.com/brettmathe/deskwork-releases/releases/latest).
+
+Deskwork is **not signed with an Apple Developer ID**, so Gatekeeper needs
+handling on first launch. Which route you take decides how much:
+
+### With the GitHub CLI (fewer steps)
+
+```bash
+cd ~/Downloads
+gh release download --repo brettmathe/deskwork-releases --pattern "*.dmg"
+hdiutil attach Deskwork_*_universal.dmg
+cp -R /Volumes/Deskwork/Deskwork.app /Applications/
+hdiutil detach /Volumes/Deskwork
+open /Applications/Deskwork.app
+```
+
+No Gatekeeper prompt: the quarantine flag is attached by browsers and
+LaunchServices, not by CLI downloads, so a file fetched this way never gets one.
+
+### Manually, from the browser
+
+1. Download the `.dmg` from the releases page.
+2. Open it and drag **Deskwork** to Applications.
+3. Clear the quarantine flag before first launch:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Deskwork.app
+   ```
+
+4. Launch it.
+
+Skip step 3 and macOS reports *"Deskwork is damaged and can't be opened"*. The
+file is fine -- that is Gatekeeper's wording for an unsigned app it cannot
+attribute. Right-click → Open no longer works around this on recent macOS; use
+the command above, or System Settings → Privacy & Security → **Open Anyway**.
+
+This friction disappears entirely if the app is ever signed with a Developer ID
+and notarized. It applies to the first install only -- once running, updates are
+signed with the app's own minisign key and install without prompting.
+
+### First launch
+
+The setup wizard appears, since a release build has no source tree to infer a
+workspace from. See [First run](#first-run) for what it offers.
+
 ## Run
 
 ```bash
@@ -75,24 +123,28 @@ universal macOS binary, and publishes the `.dmg`, `.app.tar.gz`, signature, and
 
 `workflow_dispatch` runs a build without publishing.
 
-### Known issue: DMG bundling
+### Known issue: DMG bundling hangs locally
 
 Tauri's `bundle_dmg.sh` drives Finder over AppleScript to style the disk image,
 and Tauri never passes the script's `--skip-jenkins` escape hatch. Without an
 interactive GUI session holding Automation permission for Finder, that step
-**hangs** rather than failing fast (locally it has to be killed; the run then
-reports `error running bundle_dmg.sh`).
+**hangs** rather than failing fast -- it has to be killed, and the run then
+reports `error running bundle_dmg.sh`.
 
-The updater does not need the DMG — it consumes `Deskwork.app.tar.gz` — so a
-local `--bundles app` build always works:
+This affects local builds from a non-interactive shell. **CI is fine**: GitHub's
+macOS runners have a usable session, and `v0.1.0` produced its `.dmg` there
+without trouble.
+
+The updater consumes `Deskwork.app.tar.gz` and never needs the DMG, so a local
+build can simply skip it:
 
 ```bash
 npm run tauri build -- --bundles app
 ```
 
 The workflow caps the job at 60 minutes so a hang can't run away. If DMG
-bundling turns out to fail on the runner, drop `,dmg` from the `args:` line and
-first installs use the `.app.tar.gz` instead.
+bundling ever does start failing on the runner, drop `,dmg` from the `args:`
+line and first installs use the `.app.tar.gz` instead.
 
 ### Required secrets
 

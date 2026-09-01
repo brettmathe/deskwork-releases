@@ -73,7 +73,8 @@ jobs:
           uploadUpdaterJson: true
           uploadUpdaterSignatures: true
           # `app` produces the .app.tar.gz + .sig the updater consumes -- that is
-          # the critical path. `dmg` is the nicer first-install download but its
-          # Finder/AppleScript step is unproven on this runner; if the job hangs
-          # in bundle_dmg.sh, drop `,dmg` and installs use the .app.tar.gz.
+          # the critical path. `dmg` is the first-install download; its
+          # Finder/AppleScript step hangs on a shell with no GUI session but is
+          # fine on this runner. If that ever changes, drop `,dmg` and installs
+          # fall back to the .app.tar.gz.
           args: --target universal-apple-darwin --bundles app,dmg
