@@ -137,6 +137,12 @@ The rest are kept in step so nothing reports a stale number.
 exits non-zero naming the offender if they don't. `npm run bump 0.2.0 --dry-run`
 shows what would change.
 
+The release workflow runs both guards before installing the Rust toolchain: the
+consistency check, and an assertion that the pushed tag matches the version in
+`tauri.conf.json`. So `git tag v0.3.0` on a commit still reading `0.2.0` fails
+in seconds instead of publishing a release whose name, contents, and
+`latest.json` disagree.
+
 The workflow runs the test suite, verifies the bundle is clean, builds a
 universal macOS binary, and publishes the `.dmg`, `.app.tar.gz`, signature, and
 `latest.json` as a GitHub Release here. Installed copies pick it up on next launch.
