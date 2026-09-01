@@ -19,7 +19,7 @@
   import Settings from "$lib/Settings.svelte";
   import SetupWizard from "$lib/SetupWizard.svelte";
   import UpdateBanner from "$lib/UpdateBanner.svelte";
-  import { checkForUpdate, loadCurrentVersion } from "$lib/updater.svelte";
+  import { checkForUpdate, loadCurrentVersion, updater } from "$lib/updater.svelte";
   import Toasts from "$lib/Toasts.svelte";
 
   type Nav = "inbox" | "projects" | "settings";
@@ -157,7 +157,9 @@
 {:else}
   <div class="shell">
     <nav class="sidebar">
-      <div class="brand" data-tauri-drag-region>Deskwork</div>
+      <div class="brand" data-tauri-drag-region>
+        Deskwork{#if updater.currentVersion}<span class="version">{updater.currentVersion}</span>{/if}
+      </div>
       <button class="nav-item" class:current={nav === "inbox"} onclick={() => setNav("inbox")}>
         <Icon name="inbox" size={15} />
         <span>Inbox</span>
@@ -235,6 +237,16 @@
     padding: 0 10px 12px;
     /* leave room for the macOS traffic lights (titlebar overlay) */
     padding-top: calc(var(--titlebar-h) + 8px);
+  }
+  /* Identity, not status -- kept quiet so it never competes with the nav or the
+     update banner. Rendered only once the version resolves, so it cannot flash
+     a placeholder on launch. */
+  .brand .version {
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.65;
   }
   .nav-item {
     display: flex;
