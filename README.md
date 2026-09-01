@@ -114,8 +114,15 @@ Two disclosure rules the tooling enforces, since this repo is public:
 
 ### Cutting a release
 
-1. Bump `version` in `src-tauri/tauri.conf.json` (and `package.json` to match).
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+1. Bump the version everywhere it appears. `npm version <x.y.z>
+   --no-git-tag-version` covers `package.json` and `package-lock.json`; edit
+   `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` to match, then run
+   `cargo check` to refresh `Cargo.lock`.
+2. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+`tauri.conf.json` is the one that matters: the app reports it via `getVersion()`,
+the updater compares against it, and the workflow reads it to name the release.
+The others are kept in step so nothing reports a stale number.
 
 The workflow runs the test suite, verifies the bundle is clean, builds a
 universal macOS binary, and publishes the `.dmg`, `.app.tar.gz`, signature, and
