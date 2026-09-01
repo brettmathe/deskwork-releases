@@ -114,15 +114,28 @@ Two disclosure rules the tooling enforces, since this repo is public:
 
 ### Cutting a release
 
-1. Bump the version everywhere it appears. `npm version <x.y.z>
-   --no-git-tag-version` covers `package.json` and `package-lock.json`; edit
-   `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` to match, then run
-   `cargo check` to refresh `Cargo.lock`.
+1. Bump the version: `npm run bump 0.2.0`.
 2. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+
+The version lives in six places across four files. `npm run bump` sets them all
+and verifies afterwards that each one landed, failing loudly if any did not:
+
+```
+package.json                      0.2.0
+package-lock.json (root)          0.2.0
+package-lock.json (packages[""])  0.2.0
+src-tauri/tauri.conf.json         0.2.0 (authoritative)
+src-tauri/Cargo.toml              0.2.0
+src-tauri/Cargo.lock              0.2.0
+```
 
 `tauri.conf.json` is the one that matters: the app reports it via `getVersion()`,
 the updater compares against it, and the workflow reads it to name the release.
-The others are kept in step so nothing reports a stale number.
+The rest are kept in step so nothing reports a stale number.
+
+`npm run version:check` verifies the sites agree without changing anything, and
+exits non-zero naming the offender if they don't. `npm run bump 0.2.0 --dry-run`
+shows what would change.
 
 The workflow runs the test suite, verifies the bundle is clean, builds a
 universal macOS binary, and publishes the `.dmg`, `.app.tar.gz`, signature, and
