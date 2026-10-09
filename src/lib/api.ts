@@ -62,6 +62,7 @@ export interface GitStatus {
   ahead: number;
   behind: number;
   taskChanges: GitChange[];
+  projectChanges: GitChange[];
   otherChanges: number;
   fetchError: string | null;
 }

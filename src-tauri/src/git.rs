@@ -19,13 +19,19 @@ pub struct GitStatus {
     pub has_upstream: bool,
     pub ahead: u32,
     pub behind: u32,
-    /// Uncommitted changes under inbox/ and completed/ (what Deskwork manages).
+    /// Uncommitted changes under inbox/ and completed/.
     pub task_changes: Vec<GitChange>,
-    /// Count of uncommitted changes elsewhere in the repo (informational).
+    /// Uncommitted changes under projects/.
+    pub project_changes: Vec<GitChange>,
+    /// Count of uncommitted changes elsewhere in the repo (informational; never committed).
     pub other_changes: u32,
     /// Set when `fetch` was requested but failed (offline etc.); status is still local-only valid.
     pub fetch_error: Option<String>,
 }
+
+/// Folders Deskwork commits: tasks (inbox/, completed/) and projects/.
+const TASK_DIRS: [&str; 2] = ["inbox", "completed"];
+const PROJECT_DIRS: [&str; 1] = ["projects"];
 
 fn run_git(root: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new("git")
@@ -72,6 +78,13 @@ pub fn parse_porcelain_line(line: &str) -> Option<GitChange> {
     Some(GitChange { status: status.to_string(), path })
 }
 
+/// Per-file changes under `dirs` (untracked folders are expanded to their files).
+fn changes_in(root: &Path, dirs: &[&str]) -> Result<Vec<GitChange>, String> {
+    let mut args = vec!["status", "--porcelain", "--untracked-files=all", "--"];
+    args.extend_from_slice(dirs);
+    Ok(run_git(root, &args)?.lines().filter_map(parse_porcelain_line).collect())
+}
+
 pub fn status_at(root: &Path, fetch: bool) -> Result<GitStatus, String> {
     let fetch_error = if fetch {
         run_git(root, &["fetch", "--quiet"]).err()
@@ -94,12 +107,12 @@ pub fn status_at(root: &Path, fetch: bool) -> Result<GitStatus, String> {
         None => (0, 0),
     };
 
-    let task_porcelain = run_git(root, &["status", "--porcelain", "--", "inbox", "completed"])?;
-    let task_changes: Vec<GitChange> =
-        task_porcelain.lines().filter_map(parse_porcelain_line).collect();
-    let all_porcelain = run_git(root, &["status", "--porcelain"])?;
+    let task_changes = changes_in(root, &TASK_DIRS)?;
+    let project_changes = changes_in(root, &PROJECT_DIRS)?;
+    let all_porcelain = run_git(root, &["status", "--porcelain", "--untracked-files=all"])?;
     let total = all_porcelain.lines().filter(|l| l.len() >= 4).count() as u32;
-    let other_changes = total.saturating_sub(task_changes.len() as u32);
+    let other_changes =
+        total.saturating_sub((task_changes.len() + project_changes.len()) as u32);
 
     Ok(GitStatus {
         branch,
@@ -107,6 +120,7 @@ pub fn status_at(root: &Path, fetch: bool) -> Result<GitStatus, String> {
         ahead,
         behind,
         task_changes,
+        project_changes,
         other_changes,
         fetch_error,
     })
@@ -124,10 +138,22 @@ pub fn pull_at(root: &Path) -> Result<String, String> {
     }
 }
 
-/// Stage inbox/ + completed/, commit with `message`, rebase onto upstream if
-/// behind, then push. Safe to call with nothing staged but commits ahead.
+/// Stage inbox/, completed/ and projects/, commit with `message`, rebase onto
+/// upstream if behind, then push. Safe to call with nothing staged but commits ahead.
+/// Changes elsewhere in the repo are never staged.
 pub fn commit_push_at(root: &Path, message: &str) -> Result<String, String> {
-    run_git(root, &["add", "-A", "--", "inbox", "completed"])?;
+    // `git add` rejects a pathspec that matches nothing, so skip missing folders.
+    let dirs: Vec<&str> = TASK_DIRS
+        .iter()
+        .chain(PROJECT_DIRS.iter())
+        .copied()
+        .filter(|d| root.join(d).exists())
+        .collect();
+    if !dirs.is_empty() {
+        let mut args = vec!["add", "-A", "--"];
+        args.extend_from_slice(&dirs);
+        run_git(root, &args)?;
+    }
 
     let staged_empty = run_git(root, &["diff", "--cached", "--quiet"]).is_ok();
     let mut actions = Vec::new();

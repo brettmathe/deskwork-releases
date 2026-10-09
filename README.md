@@ -1,6 +1,6 @@
 # Deskwork
 
-Desktop app for a markdown workspace: manage `inbox/` (create, edit, complete, delete) and browse `projects/` read-only. The workspace's markdown files are the only data store.
+Desktop app for a markdown workspace: manage `inbox/` (create, edit, complete, delete), browse `projects/`, and commit and push changes to both. The workspace's markdown files are the only data store.
 
 A *workspace* is any folder containing `inbox/` and `projects/`. Deskwork never bundles its contents -- it reads and writes them on disk at runtime. On first run it will find, clone, or create one for you.
 
@@ -206,10 +206,10 @@ All writes are confined to `inbox/` and `completed/` by construction; `docs/`, `
 
 ## Git sync (sidebar Repository panel)
 
-The sidebar shows the current branch, ahead/behind counters (fetched every 5 minutes and on window focus), and the number of uncommitted task changes.
+The sidebar shows the current branch, ahead/behind counters (fetched every 5 minutes and on window focus), and uncommitted changes: task changes (`inbox/`, `completed/`), project changes (`projects/`, file list on hover), and a count of changes elsewhere. The ✓ only shows when nothing is pending anywhere.
 
 - **Pull** — `git pull --rebase --autostash`; shown whenever origin has new commits (e.g. the pages-static bot commit after every push). A failed rebase is aborted automatically so the repo is never left mid-operation.
-- **Commit & Push** — stages **only** `inbox/` and `completed/`, commits with an editable prefilled message, pulls first if origin moved, then pushes. Changes elsewhere in the repo are shown as "+N outside tasks" and are never committed by the app.
+- **Commit & Push** — stages **only** `inbox/`, `completed/` and `projects/`, commits with an editable prefilled message (e.g. `Tasks: add …` · `Projects: update <slug>`), pulls first if origin moved, then pushes. Changes elsewhere in the repo are shown as "+N elsewhere" and are never committed by the app.
 
 Git runs as your user (`git` on PATH), so your normal SSH/keychain credentials apply.
 

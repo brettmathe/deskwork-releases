@@ -50,7 +50,40 @@
     return name.replace(/\.md$/, "").replace(/^\d{4}-\d{2}-\d{2}-/, "");
   }
 
-  function defaultMessage(changes: GitChange[]): string {
+  // projects/<slug>/... -> slug; projects/README.md -> "registry"; other top-level files by name.
+  function projectKey(path: string): string {
+    const parts = path.split("/");
+    if (parts.length > 2) return parts[1];
+    return parts[1] === "README.md" ? "registry" : stem(parts[1] ?? path);
+  }
+
+  function projectsMessage(changes: GitChange[]): string {
+    const byKey = new Map<string, GitChange[]>();
+    for (const c of changes) {
+      const k = projectKey(c.path);
+      byKey.set(k, [...(byKey.get(k) ?? []), c]);
+    }
+    const parts = [...byKey.entries()].map(([k, cs]) => {
+      const verb = cs.every((c) => c.status === "untracked" || c.status === "added")
+        ? "add"
+        : cs.every((c) => c.status === "deleted")
+          ? "remove"
+          : "update";
+      return `${verb} ${k}`;
+    });
+    return `Projects: ${parts.join("; ")}`;
+  }
+
+  function defaultMessage(tasks: GitChange[], projects: GitChange[]): string {
+    const parts: string[] = [];
+    if (tasks.length > 0) parts.push(tasksMessage(tasks));
+    if (projects.length > 0) parts.push(projectsMessage(projects));
+    let msg = parts.join(" · ");
+    if (msg.length > 72) msg = `${msg.slice(0, 69)}…`;
+    return msg;
+  }
+
+  function tasksMessage(changes: GitChange[]): string {
     // "complete" wins for a rename pair; dedupe by stem so inbox->completed
     // renames don't show twice.
     const seen = new Map<string, string>();
@@ -60,16 +93,14 @@
       if (!seen.has(s) || v === "complete") seen.set(s, v);
     }
     let parts = [...seen.entries()].map(([s, v]) => `${v} ${s.replaceAll("-", " ")}`);
-    let msg = `Tasks: ${parts.join("; ")}`;
-    if (msg.length > 72) msg = `${msg.slice(0, 69)}…`;
-    return msg;
+    return `Tasks: ${parts.join("; ")}`;
   }
 
   function openCommit() {
     if (!status) return;
     message =
-      status.taskChanges.length > 0
-        ? defaultMessage(status.taskChanges)
+      pending.length > 0
+        ? defaultMessage(status.taskChanges, status.projectChanges)
         : "Push pending commits";
     showCommitModal = true;
   }
@@ -105,9 +136,21 @@
     }
   }
 
+  // Everything Commit & Push will stage: tasks first, then projects.
+  const pending = $derived.by(() => {
+    const s = status;
+    return s ? [...s.taskChanges, ...s.projectChanges] : [];
+  });
+
   const canPush = $derived.by(() => {
     const s = status;
-    return s !== null && s.hasUpstream && (s.taskChanges.length > 0 || s.ahead > 0);
+    return s !== null && s.hasUpstream && (pending.length > 0 || s.ahead > 0);
+  });
+
+  // In sync only when nothing is waiting anywhere, including changes Deskwork won't commit.
+  const inSync = $derived.by(() => {
+    const s = status;
+    return s !== null && s.ahead === 0 && s.behind === 0 && pending.length === 0 && s.otherChanges === 0;
   });
 </script>
 
@@ -118,7 +161,7 @@
       <span class="branch mono">{status.branch}</span>
       {#if status.ahead > 0}<span class="counter ahead" title="{status.ahead} commit(s) to push">↑{status.ahead}</span>{/if}
       {#if status.behind > 0}<span class="counter behind" title="{status.behind} commit(s) behind origin">↓{status.behind}</span>{/if}
-      {#if status.ahead === 0 && status.behind === 0 && status.taskChanges.length === 0}
+      {#if inSync}
         <span class="insync" title="In sync with origin"><Icon name="check" size={11} /></span>
       {/if}
     </div>
@@ -127,9 +170,14 @@
         {status.taskChanges.length} task change{status.taskChanges.length === 1 ? "" : "s"}
       </div>
     {/if}
+    {#if status.projectChanges.length > 0}
+      <div class="git-changes" title={status.projectChanges.map((c) => c.path).join("\n")}>
+        {status.projectChanges.length} project change{status.projectChanges.length === 1 ? "" : "s"}
+      </div>
+    {/if}
     {#if status.otherChanges > 0}
-      <div class="git-other" title="Uncommitted changes outside inbox/ and completed/ — Deskwork won't commit these">
-        +{status.otherChanges} outside tasks
+      <div class="git-other" title="Uncommitted changes outside inbox/, completed/ and projects/ — Deskwork won't commit these">
+        +{status.otherChanges} elsewhere
       </div>
     {/if}
 
@@ -140,7 +188,7 @@
     {/if}
     {#if canPush}
       <button class="btn primary git-btn" onclick={openCommit} disabled={busy !== null}>
-        {status.taskChanges.length > 0 ? "Commit & Push" : `Push ${status.ahead}`}
+        {pending.length > 0 ? "Commit & Push" : `Push ${status.ahead}`}
       </button>
     {/if}
   </div>
@@ -150,10 +198,10 @@
   <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
   <div class="backdrop" onclick={(e) => e.target === e.currentTarget && (showCommitModal = false)}>
     <div class="modal">
-      <h3>Commit &amp; push tasks</h3>
-      {#if status.taskChanges.length > 0}
+      <h3>Commit &amp; push changes</h3>
+      {#if pending.length > 0}
         <ul class="changes">
-          {#each status.taskChanges as c (c.path)}
+          {#each pending as c (c.path)}
             <li>
               <span class="pill {c.status === 'deleted' ? 'hold' : 'active'}">{verbFor(c)}</span>
               <span class="mono">{c.path}</span>
@@ -175,7 +223,7 @@
         <button
           class="btn primary"
           onclick={commitPush}
-          disabled={busy !== null || (status.taskChanges.length > 0 && !message.trim())}
+          disabled={busy !== null || (pending.length > 0 && !message.trim())}
         >
           {busy === "push" ? "Syncing…" : "Commit & Push"}
         </button>
