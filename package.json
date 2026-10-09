@@ -1,6 +1,6 @@
 {
   "name": "deskwork",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Desktop app for a markdown workspace: inbox management + read-only project browsing",
   "type": "module",
   "scripts": {
