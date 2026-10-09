@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 export interface InboxItem {
   filename: string;
@@ -67,6 +67,8 @@ export interface GitStatus {
   fetchError: string | null;
 }
 
+export type TerminalEvent = { kind: "output"; data: string } | { kind: "exit" };
+
 export interface RepoCandidate {
   path: string;
   hasGit: boolean;
@@ -121,4 +123,10 @@ export const api = {
   gitStatus: (fetch: boolean) => invoke<GitStatus>("git_status", { fetch }),
   gitPull: () => invoke<string>("git_pull"),
   gitCommitPush: (message: string) => invoke<string>("git_commit_push", { message }),
+
+  terminalStart: (cols: number, rows: number, onEvent: Channel<TerminalEvent>) =>
+    invoke<void>("terminal_start", { cols, rows, onEvent }),
+  terminalWrite: (data: string) => invoke<void>("terminal_write", { data }),
+  terminalResize: (cols: number, rows: number) => invoke<void>("terminal_resize", { cols, rows }),
+  terminalStop: () => invoke<void>("terminal_stop"),
 };

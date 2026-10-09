@@ -4,12 +4,16 @@ pub mod model;
 pub mod projects;
 pub mod repo;
 pub mod setup;
+pub mod terminal;
+pub mod watcher;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use repo::RepoState;
 use tauri::Manager;
+use terminal::TerminalState;
+use watcher::WatcherState;
 
 #[tauri::command]
 fn get_repo_root(state: tauri::State<RepoState>) -> Result<Option<String>, String> {
@@ -36,6 +40,9 @@ fn set_repo_root(
     let canonical = p.canonicalize().map_err(|e| e.to_string())?;
     repo::save_root(&app, &canonical)?;
     *state.0.lock().map_err(|e| e.to_string())? = Some(canonical.clone());
+    // A terminal started in the old workspace would keep editing it.
+    app.state::<TerminalState>().stop();
+    watcher::watch(&app, &app.state::<WatcherState>(), canonical.clone())?;
     Ok(canonical.to_string_lossy().to_string())
 }
 
@@ -53,6 +60,14 @@ pub fn run() {
     builder
         .setup(|app| {
             let root = repo::resolve_root(app.handle());
+            app.manage(TerminalState::default());
+            app.manage(WatcherState::default());
+            if let Some(r) = &root {
+                // Not fatal: the focus refresh still works without it.
+                if let Err(e) = watcher::watch(app.handle(), &app.state::<WatcherState>(), r.clone()) {
+                    eprintln!("file watcher unavailable: {e}");
+                }
+            }
             app.manage(RepoState(Mutex::new(root)));
             Ok(())
         })
@@ -79,7 +94,17 @@ pub fn run() {
             setup::check_tooling,
             setup::clone_repo,
             setup::create_repo,
+            terminal::terminal_start,
+            terminal::terminal_write,
+            terminal::terminal_resize,
+            terminal::terminal_stop,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Don't leave Claude running after the window that showed it is gone.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<TerminalState>().stop();
+            }
+        });
 }
