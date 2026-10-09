@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { listen } from "@tauri-apps/api/event";
   import { confirm } from "@tauri-apps/plugin-dialog";
   import type {
     ExtraEntry,
@@ -18,6 +19,7 @@
   import GitPanel from "$lib/GitPanel.svelte";
   import Settings from "$lib/Settings.svelte";
   import SetupWizard from "$lib/SetupWizard.svelte";
+  import TerminalDrawer from "$lib/TerminalDrawer.svelte";
   import UpdateBanner from "$lib/UpdateBanner.svelte";
   import { checkForUpdate, loadCurrentVersion, updater } from "$lib/updater.svelte";
   import Toasts from "$lib/Toasts.svelte";
@@ -37,6 +39,7 @@
   let projects: ProjectSummary[] = $state([]);
   let selectedProject: ProjectDetailT | null = $state(null);
   let gitPanel: GitPanel | undefined = $state();
+  let terminalOpen = $state(false);
 
   async function boot() {
     try {
@@ -130,7 +133,18 @@
     void refreshAll();
   }
 
+  // Capture phase so the toggle works while the terminal has focus.
+  function onKeydownCapture(e: KeyboardEvent) {
+    if (e.ctrlKey && e.key === "`" && repoRoot) {
+      e.preventDefault();
+      e.stopPropagation();
+      terminalOpen = !terminalOpen;
+    }
+  }
+
   function onKeydown(e: KeyboardEvent) {
+    // Keys typed into the terminal belong to Claude, not to Deskwork.
+    if ((e.target as Element | null)?.closest?.(".terminal-drawer")) return;
     if (e.metaKey && e.key === "n" && nav === "inbox" && repoRoot) {
       e.preventDefault();
       showNewModal = true;
@@ -145,10 +159,30 @@
     }
   }
 
+  // Files changed on disk while Deskwork stayed focused (e.g. Claude in the
+  // terminal drawer). Same guard as the focus refresh; also reloads the open project.
+  async function onWorkspaceChanged() {
+    void gitPanel?.refresh(false);
+    if (!repoRoot || editorDirty) return;
+    await refreshAll();
+    if (selectedProject) {
+      try {
+        selectedProject = await api.getProject(selectedProject.dir);
+      } catch {
+        selectedProject = null;
+      }
+    }
+  }
+
+  $effect(() => {
+    const unlisten = listen("workspace-changed", () => void onWorkspaceChanged());
+    return () => void unlisten.then((f) => f());
+  });
+
   void boot();
 </script>
 
-<svelte:window onkeydown={onKeydown} onfocus={onFocus} />
+<svelte:window onkeydown={onKeydown} onkeydowncapture={onKeydownCapture} onfocus={onFocus} />
 
 {#if booted && !repoRoot}
   <div class="setup" data-tauri-drag-region>
@@ -168,6 +202,15 @@
       <button class="nav-item" class:current={nav === "projects"} onclick={() => setNav("projects")}>
         <Icon name="folder" size={15} />
         <span>Projects</span>
+      </button>
+      <button
+        class="nav-item"
+        class:current={terminalOpen}
+        title="Claude in this workspace (⌃`)"
+        onclick={() => (terminalOpen = !terminalOpen)}
+      >
+        <Icon name="terminal" size={15} />
+        <span>Claude</span>
       </button>
       <div class="spacer"></div>
       <UpdateBanner />
@@ -208,6 +251,7 @@
         <Settings {repoRoot} {onRootChanged} />
       </div>
     {/if}
+    <TerminalDrawer open={terminalOpen} onClose={() => (terminalOpen = false)} />
   </div>
 {/if}
 

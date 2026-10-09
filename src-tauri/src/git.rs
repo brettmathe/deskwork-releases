@@ -80,7 +80,7 @@ pub fn parse_porcelain_line(line: &str) -> Option<GitChange> {
 
 /// Per-file changes under `dirs` (untracked folders are expanded to their files).
 fn changes_in(root: &Path, dirs: &[&str]) -> Result<Vec<GitChange>, String> {
-    let mut args = vec!["status", "--porcelain", "--untracked-files=all", "--"];
+    let mut args = vec!["--no-optional-locks", "status", "--porcelain", "--untracked-files=all", "--"];
     args.extend_from_slice(dirs);
     Ok(run_git(root, &args)?.lines().filter_map(parse_porcelain_line).collect())
 }
@@ -109,7 +109,10 @@ pub fn status_at(root: &Path, fetch: bool) -> Result<GitStatus, String> {
 
     let task_changes = changes_in(root, &TASK_DIRS)?;
     let project_changes = changes_in(root, &PROJECT_DIRS)?;
-    let all_porcelain = run_git(root, &["status", "--porcelain", "--untracked-files=all"])?;
+    // --no-optional-locks: status must not rewrite .git/index, which the file
+    // watcher treats as a change and would answer with another status.
+    let all_porcelain =
+        run_git(root, &["--no-optional-locks", "status", "--porcelain", "--untracked-files=all"])?;
     let total = all_porcelain.lines().filter(|l| l.len() >= 4).count() as u32;
     let other_changes =
         total.saturating_sub((task_changes.len() + project_changes.len()) as u32);

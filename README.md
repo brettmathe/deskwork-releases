@@ -213,13 +213,27 @@ The sidebar shows the current branch, ahead/behind counters (fetched every 5 min
 
 Git runs as your user (`git` on PATH), so your normal SSH/keychain credentials apply.
 
+Workspace folders (`inbox/`, `completed/`, `projects/`) and the git index are also watched on disk, so edits made while Deskwork stays focused — for example by Claude in the terminal drawer — refresh the lists, the open project and this panel.
+
+## Claude terminal (sidebar → Claude, or ⌃`)
+
+A slide-out drawer on the right runs the Claude CLI in the workspace root.
+
+- Claude starts through your login + interactive shell (`$SHELL -l -i -c 'exec claude'`), so PATH and everything else from your dotfiles applies, as in a normal terminal tab. Variables a parent Claude process sets for its children (`CLAUDE_CODE_*`, `CLAUDE_AGENT_SDK_*`, `CLAUDECODE`, `ANTHROPIC_BASE_URL`) are stripped first, so starting Deskwork from inside Claude doesn't leak into it.
+- Hiding the drawer (✕ or ⌃`) leaves Claude running. Exiting Claude (e.g. ⌃C twice) closes the drawer; the next open starts a fresh session. A session that exits within 3 seconds keeps the drawer open so its error is readable.
+- Drag the left edge to resize; the width is remembered. ⌘C copies the selection.
+- Claude is stopped when the app quits or the workspace changes.
+
 ## Layout
 
 - `src-tauri/src/repo.rs` — workspace resolution, path confinement, atomic writes
 - `src-tauri/src/setup.rs` — first-run detection, clone, and workspace scaffolding
 - `src-tauri/src/inbox.rs` — inbox parsing + all mutating commands
 - `src-tauri/src/projects.rs` — registry table, README metadata, artifact tree (read-only)
+- `src-tauri/src/terminal.rs` — pseudo-terminal running Claude for the terminal drawer
+- `src-tauri/src/watcher.rs` — debounced file watcher behind the `workspace-changed` event
 - `src/routes/+page.svelte` — three-pane shell (sidebar / list / detail)
 - `src/lib/SetupWizard.svelte` — first-run wizard (detect / pick / clone / create)
+- `src/lib/TerminalDrawer.svelte` — slide-out xterm.js drawer for Claude
 - `src/lib/updater.svelte.ts` — update check/download state; `UpdateBanner.svelte` is its sidebar surface
 - `src/lib/` — panes, modal, markdown rendering (marked + DOMPurify), theme
