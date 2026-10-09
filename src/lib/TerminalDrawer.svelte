@@ -12,7 +12,13 @@
   // Stays mounted while closed so Claude keeps running in the background;
   // `open` only slides the drawer in and out. When Claude exits the drawer
   // closes, and the next open starts a fresh session.
-  let { open, onClose }: { open: boolean; onClose: () => void } = $props();
+  // `fill`: take all remaining width (the viewer is collapsed) instead of the
+  // drawer's own resizable width.
+  let {
+    open,
+    fill = false,
+    onClose,
+  }: { open: boolean; fill?: boolean; onClose: () => void } = $props();
 
   // A session that dies this fast failed to start (e.g. `claude` not on PATH);
   // stay open so its error is readable.
@@ -20,6 +26,7 @@
 
   const WIDTH_KEY = "deskwork.terminalWidth";
   const MIN_W = 360;
+  const DEFAULT_W = 560;
   const MIN_MAIN = 420; // keep the rest of the app usable
 
   let width = $state(readWidth());
@@ -35,9 +42,9 @@
   function readWidth(): number {
     try {
       const w = Number(localStorage.getItem(WIDTH_KEY));
-      return w >= MIN_W ? w : 560;
+      return w >= MIN_W ? w : DEFAULT_W;
     } catch {
-      return 560;
+      return DEFAULT_W;
     }
   }
 
@@ -142,6 +149,15 @@
 
   $effect(() => () => void api.terminalStop().catch(() => {}));
 
+  function resetWidth() {
+    width = clampWidth(DEFAULT_W);
+    try {
+      localStorage.setItem(WIDTH_KEY, String(width));
+    } catch {
+      // width just won't be remembered
+    }
+  }
+
   function onHandleDown(e: PointerEvent) {
     dragging = true;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -162,15 +178,19 @@
   }
 </script>
 
-<aside class="terminal-drawer" class:open class:dragging style="--w:{width}px" aria-hidden={!open}>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="handle"
-    onpointerdown={onHandleDown}
-    onpointermove={onHandleMove}
-    onpointerup={onHandleUp}
-    onpointercancel={onHandleUp}
-  ></div>
+<aside class="terminal-drawer" class:open class:fill class:dragging style="--w:{width}px" aria-hidden={!open}>
+  {#if !fill}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="handle"
+      onpointerdown={onHandleDown}
+      onpointermove={onHandleMove}
+      onpointerup={onHandleUp}
+      onpointercancel={onHandleUp}
+      ondblclick={resetWidth}
+      title="Drag to resize · double-click to reset"
+    ></div>
+  {/if}
   <div class="inner">
     <header data-tauri-drag-region>
       <Icon name="terminal" size={13} />
@@ -206,6 +226,15 @@
   .terminal-drawer.open {
     width: var(--w);
     border-left-color: var(--border);
+  }
+  .terminal-drawer.open.fill {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+    transition: none;
+  }
+  .fill .inner {
+    width: 100%;
   }
   .terminal-drawer.dragging {
     transition: none;
