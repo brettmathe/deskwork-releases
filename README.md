@@ -224,6 +224,14 @@ A slide-out drawer on the right runs the Claude CLI in the workspace root.
 - Drag the left edge to resize; the width is remembered. ⌘C copies the selection.
 - Claude is stopped when the app quits or the workspace changes.
 
+## Panels
+
+The window has four panels: sidebar, list, viewer and the Claude drawer.
+
+- **Collapse:** the toggles beside the traffic lights, or ⌘1 (sidebar), ⌘2 (list), ⌘3 (viewer) and ⌃` (Claude). Shortcuts work while typing in the terminal. Each panel collapses to zero width; with the viewer collapsed, Claude (or, if it's hidden, the list) fills the room. Picking a project or inbox item reopens the viewer.
+- **Resize:** drag the sidebar's or list's right edge, or the Claude drawer's left edge; the viewer takes what's left. Double-click an edge to reset it.
+- Collapsed panels and widths are remembered per machine.
+
 ## Layout
 
 - `src-tauri/src/repo.rs` — workspace resolution, path confinement, atomic writes
@@ -235,5 +243,6 @@ A slide-out drawer on the right runs the Claude CLI in the workspace root.
 - `src/routes/+page.svelte` — three-pane shell (sidebar / list / detail)
 - `src/lib/SetupWizard.svelte` — first-run wizard (detect / pick / clone / create)
 - `src/lib/TerminalDrawer.svelte` — slide-out xterm.js drawer for Claude
+- `src/lib/ResizeHandle.svelte` — drag handle used to resize the sidebar and list
 - `src/lib/updater.svelte.ts` — update check/download state; `UpdateBanner.svelte` is its sidebar surface
 - `src/lib/` — panes, modal, markdown rendering (marked + DOMPurify), theme
