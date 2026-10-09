@@ -105,14 +105,30 @@ fn full_sync_cycle_with_remote_bot_commit() {
     let s = git::status_at(&local, true).unwrap();
     assert_eq!((s.ahead, s.behind), (0, 0));
 
-    // Changes outside inbox/completed are counted but never committed by the app.
+    // projects/ changes are listed per file (untracked folders expanded) and committed.
     fs::write(local.join("projects/README.md"), "# Projects\n\nedited\n").unwrap();
+    fs::create_dir_all(local.join("projects/new-project")).unwrap();
+    fs::write(local.join("projects/new-project/README.md"), "# New project\n").unwrap();
+    fs::write(local.join("projects/new-project/notes.md"), "notes\n").unwrap();
+    let s = git::status_at(&local, false).unwrap();
+    assert!(s.task_changes.is_empty());
+    assert_eq!(s.project_changes.len(), 3, "{:?}", s.project_changes.iter().map(|c| &c.path).collect::<Vec<_>>());
+    assert_eq!(s.other_changes, 0);
+
+    // Changes elsewhere are counted but never committed by the app.
+    fs::write(local.join("docs.txt"), "local edit\n").unwrap();
     let s = git::status_at(&local, false).unwrap();
     assert_eq!(s.other_changes, 1);
-    assert!(s.task_changes.is_empty());
-    assert!(git::commit_push_at(&local, "should not commit projects").is_err()); // nothing staged, nothing ahead
-    let s = git::status_at(&local, false).unwrap();
-    assert_eq!(s.other_changes, 1, "projects/ edit must remain uncommitted");
+
+    let msg = git::commit_push_at(&local, "Projects: update registry; add new-project").unwrap();
+    assert!(msg.contains("committed") && msg.contains("pushed"), "{msg}");
+    let s = git::status_at(&local, true).unwrap();
+    assert!(s.project_changes.is_empty());
+    assert_eq!((s.ahead, s.behind), (0, 0));
+    assert_eq!(s.other_changes, 1, "edit outside inbox/completed/projects must remain uncommitted");
+
+    // Nothing left to commit or push (the remaining edit is outside Deskwork's folders).
+    assert!(git::commit_push_at(&local, "should not commit docs").is_err());
 
     let _ = fs::remove_dir_all(&base);
 }
