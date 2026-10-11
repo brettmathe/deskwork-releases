@@ -183,14 +183,22 @@
     }
   }
 
-  async function onItemChanged() {
-    if (selectedItem) {
-      try {
-        selectedItem = await api.getInboxItem(selectedItem.filename);
-      } catch {
-        selectedItem = null;
-      }
+  // Re-read the open item from disk. Only swaps it when the content changed, so
+  // unrelated workspace events don't bounce the viewer out of edit mode.
+  async function reloadSelectedItem() {
+    if (!selectedItem) return;
+    try {
+      const fresh = await api.getInboxItem(selectedItem.filename);
+      // The user may have started typing while the read was in flight.
+      if (!editorDirty && fresh.content !== selectedItem?.content) selectedItem = fresh;
+    } catch {
+      // Completed, renamed or deleted outside Deskwork.
+      selectedItem = null;
     }
+  }
+
+  async function onItemChanged() {
+    await reloadSelectedItem();
     await refreshInbox();
     void gitPanel?.refresh(false);
   }
@@ -258,16 +266,19 @@
   function onFocus() {
     if (repoRoot && !editorDirty) {
       void refreshAll();
+      void reloadSelectedItem();
       void gitPanel?.refresh(true);
     }
   }
 
   // Files changed on disk while Deskwork stayed focused (e.g. Claude in the
-  // terminal drawer). Same guard as the focus refresh; also reloads the open project.
+  // terminal drawer). Same guard as the focus refresh; also reloads the open item
+  // and project.
   async function onWorkspaceChanged() {
     void gitPanel?.refresh(false);
     if (!repoRoot || editorDirty) return;
     await refreshAll();
+    await reloadSelectedItem();
     if (selectedProject) {
       try {
         selectedProject = await api.getProject(selectedProject.dir);
