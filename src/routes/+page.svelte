@@ -22,7 +22,7 @@
   import TerminalDrawer from "$lib/TerminalDrawer.svelte";
   import ResizeHandle from "$lib/ResizeHandle.svelte";
   import UpdateBanner from "$lib/UpdateBanner.svelte";
-  import { checkForUpdate, loadCurrentVersion, updater } from "$lib/updater.svelte";
+  import { checkForUpdate, checkForUpdateIfStale, loadCurrentVersion, updater } from "$lib/updater.svelte";
   import Toasts from "$lib/Toasts.svelte";
 
   type Nav = "inbox" | "projects" | "settings";
@@ -262,8 +262,18 @@
     }
   }
 
+  // Re-check for updates while Deskwork stays open: at most every 6 hours on a
+  // timer, or after an hour away when the window regains focus. The hourly tick
+  // (rather than a 6-hour timer) also catches up promptly after the Mac sleeps.
+  const HOUR = 60 * 60 * 1000;
+  $effect(() => {
+    const t = setInterval(() => void checkForUpdateIfStale(6 * HOUR), HOUR);
+    return () => clearInterval(t);
+  });
+
   // Refresh from disk when the window regains focus (external edits, Slack scanner).
   function onFocus() {
+    void checkForUpdateIfStale(HOUR);
     if (repoRoot && !editorDirty) {
       void refreshAll();
       void reloadSelectedItem();

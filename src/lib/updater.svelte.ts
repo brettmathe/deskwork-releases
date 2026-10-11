@@ -37,6 +37,10 @@ export const updater = $state<UpdateState>({
 /** Held between check and install so the user can decide in between. */
 let pending: Update | null = null;
 
+/** When the last check started (ms since epoch); 0 = never. Failed checks count,
+ *  so an offline machine isn't retried on every focus. */
+let lastCheckAt = 0;
+
 export async function loadCurrentVersion() {
   try {
     updater.currentVersion = await getVersion();
@@ -61,6 +65,7 @@ const NO_RELEASE = "Could not fetch a valid release JSON from the remote";
  */
 export async function checkForUpdate(silent = false): Promise<boolean> {
   if (updater.status === "checking" || updater.status === "downloading") return false;
+  lastCheckAt = Date.now();
   updater.status = "checking";
   updater.error = null;
   try {
@@ -95,6 +100,20 @@ export async function checkForUpdate(silent = false): Promise<boolean> {
     updater.error = message;
     return false;
   }
+}
+
+/**
+ * Silent background check, skipped when the last one is younger than `maxAgeMs`.
+ *
+ * The launch check alone misses releases published while Deskwork stays open,
+ * which can be days. Once an update is offered, downloading or waiting for a
+ * restart, there is nothing new to learn, and re-checking would reset that state.
+ */
+export async function checkForUpdateIfStale(maxAgeMs: number): Promise<void> {
+  const s = updater.status;
+  if (s === "available" || s === "downloading" || s === "ready") return;
+  if (Date.now() - lastCheckAt < maxAgeMs) return;
+  await checkForUpdate(true);
 }
 
 /** Download and install the pending update, then report readiness to relaunch. */
